@@ -27,6 +27,8 @@
         .drag-active { border-color: #3b82f6 !important; background-color: rgba(59, 130, 246, 0.05) !important; }
         .interactive-element { cursor: pointer; transition: background-color 0.2s; }
         .interactive-element:hover { background-color: rgba(59, 130, 246, 0.1); }
+        .issue-card { cursor: pointer; transition: background-color 0.2s; }
+        .issue-card:hover { background-color: rgba(59, 130, 246, 0.05); }
     </style>
 </head>
 <body class="bg-gray-950 text-gray-200 min-h-screen">
@@ -42,7 +44,7 @@
                     <button id="btn-export-excel" class="text-xs font-medium text-white bg-green-700 hover:bg-green-600 px-3 py-1.5 rounded border border-green-600 transition-colors">Export Excel</button>
                 </div>
                 <div class="text-xs font-mono bg-blue-900/30 text-blue-400 px-3 py-1.5 rounded border border-blue-800/50">
-                    v1.1.0-spike
+                    v1.2.0-spike
                 </div>
             </div>
         </header>
@@ -77,9 +79,7 @@
                         <p id="filename-display" class="text-sm text-gray-400 font-mono mt-1"></p>
                     </div>
                 </div>
-
                 <div class="space-y-4 font-mono text-sm" id="progress-steps">
-                    <!-- Dynamic steps inserted via JS -->
                 </div>
             </div>
         </section>
@@ -87,8 +87,10 @@
         <div class="flex flex-col lg:flex-row gap-6">
             <!-- Left Column: Results -->
             <section id="results-view" class="hidden flex-grow flex flex-col space-y-6 lg:w-2/3">
+                
                 <!-- Top row: Metadata and Review Panel -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                    
                     <!-- Document Summary -->
                     <div class="bg-gray-900 border border-gray-800 rounded-lg p-5 shadow-sm">
                         <h3 class="text-xs font-semibold text-gray-500 tracking-wider uppercase mb-4">Document Summary</h3>
@@ -98,12 +100,12 @@
                     </div>
 
                     <!-- Review Panel -->
-                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-5 shadow-sm flex flex-col">
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-5 shadow-sm flex flex-col max-h-[400px]">
                         <h3 class="text-xs font-semibold text-gray-500 tracking-wider uppercase mb-4 flex items-center">
-                            Review Panel
-                            <span id="review-badge" class="ml-2 text-[10px] px-1.5 py-0.5 rounded font-bold"></span>
+                            Review panel
+                            <span id="review-badge" class="ml-2 text-[10px] px-2 py-0.5 rounded font-bold"></span>
                         </h3>
-                        <div id="review-content" class="flex-grow overflow-auto">
+                        <div id="review-content" class="flex-grow overflow-auto pr-2">
                             <!-- Populated via JS -->
                         </div>
                     </div>
@@ -118,12 +120,13 @@
                         <table class="min-w-full divide-y divide-gray-800 text-sm text-left">
                             <thead class="bg-gray-850">
                                 <tr>
-                                    <th scope="col" class="px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">S.No</th>
-                                    <th scope="col" class="px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">CTH</th>
-                                    <th scope="col" class="px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                                    <th scope="col" class="px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
-                                    <th scope="col" class="px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
-                                    <th scope="col" class="px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Amount Validation</th>
+                                    <th scope="col" class="px-5 py-3 text-[10px] font-medium text-gray-500 uppercase tracking-wider">S.No</th>
+                                    <th scope="col" class="px-5 py-3 text-[10px] font-medium text-gray-500 uppercase tracking-wider">CTH</th>
+                                    <th scope="col" class="px-5 py-3 text-[10px] font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                                    <th scope="col" class="px-5 py-3 text-[10px] font-medium text-gray-500 uppercase tracking-wider">Qty</th>
+                                    <th scope="col" class="px-5 py-3 text-[10px] font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                                    <th scope="col" class="px-5 py-3 text-[10px] font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                                    <th scope="col" class="px-5 py-3 text-[10px] font-medium text-gray-500 uppercase tracking-wider">Validation Status</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-800 bg-gray-900" id="table-body">
@@ -143,7 +146,7 @@
                     </div>
                     
                     <div id="evidence-placeholder" class="flex-grow flex items-center justify-center text-gray-600 text-sm italic text-center px-4">
-                        Click on any field or line item row to view source evidence and extraction details.
+                        Click on any field, line item row, or review issue to view source evidence and extraction details.
                     </div>
                     
                     <div id="evidence-content" class="hidden flex-grow flex flex-col space-y-4">

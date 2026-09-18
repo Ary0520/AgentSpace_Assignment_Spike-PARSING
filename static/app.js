@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
         exportButtonsContainer.classList.add('hidden');
         
         updateProgress(getStepHtml('Document received. Hashing and uploading...', 'success'));
-        updateProgress(getStepHtml('Running OCR/Text extraction...', 'loading'));
+        updateProgress(getStepHtml('Running spatial OCR fallback (Tesseract)...', 'loading'));
 
         const formData = new FormData();
         formData.append('file', file);
@@ -88,9 +88,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             
             if (response.ok) {
-                progressSteps.lastElementChild.innerHTML = getStepHtml('Running OCR/Text extraction...', 'success');
-                updateProgress(getStepHtml('Applying deterministic table reconstruction...', 'success'));
-                updateProgress(getStepHtml('Validating arithmetic and cross-field rules...', 'success'));
+                progressSteps.lastElementChild.innerHTML = getStepHtml('Running spatial OCR fallback...', 'success');
+                updateProgress(getStepHtml('Applying deterministic extraction & generalization...', 'success'));
+                updateProgress(getStepHtml('Validating arithmetic and recovering occlusions...', 'success'));
                 
                 setTimeout(() => {
                     processingView.classList.add('hidden');
@@ -128,30 +128,54 @@ document.addEventListener('DOMContentLoaded', () => {
             ${renderField('Total Assessed', data.total_assessed_value)}
         `;
 
-        // 2. Render Review Panel
+        // 2. Render Review Panel (Grouped)
         const reviewContent = document.getElementById('review-content');
         const reviewBadge = document.getElementById('review-badge');
         
-        if (data.failed_extractions && data.failed_extractions.length > 0) {
-            reviewBadge.textContent = `${data.failed_extractions.length} Issues`;
-            reviewBadge.className = 'ml-2 text-[10px] px-1.5 py-0.5 rounded font-bold bg-amber-900/40 text-amber-400 border border-amber-800';
-            reviewContent.innerHTML = `
-                <ul class="space-y-2 mt-1">
-                    ${data.failed_extractions.map(w => `
-                        <li class="flex items-start text-xs text-amber-200/90 bg-amber-950/20 p-2 rounded border border-amber-900/30">
-                            <svg class="w-4 h-4 mr-2 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                            <span>${escapeHtml(w)}</span>
-                        </li>
-                    `).join('')}
-                </ul>
-            `;
+        const issues = data.issues || [];
+        if (issues.length > 0) {
+            reviewBadge.textContent = `${issues.length} Issue${issues.length > 1 ? 's' : ''}`;
+            reviewBadge.className = 'ml-2 text-[10px] px-2 py-0.5 rounded font-bold bg-amber-900/40 text-amber-400 border border-amber-800';
+            
+            // Group issues
+            const groups = issues.reduce((acc, issue) => {
+                const type = issue.type || 'Other';
+                if (!acc[type]) acc[type] = [];
+                acc[type].push(issue);
+                return acc;
+            }, {});
+
+            let html = `<div class="space-y-4">`;
+            for (const [groupName, groupIssues] of Object.entries(groups)) {
+                html += `
+                    <div>
+                        <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 border-b border-gray-800 pb-1">${groupName}</h4>
+                        <div class="space-y-2">
+                `;
+                html += groupIssues.map(issue => {
+                    return `
+                        <div class="issue-card bg-gray-800/50 p-3 rounded border border-gray-700/50" 
+                             onclick="showIssueEvidence(this)" 
+                             data-issue="${escapeHtml(JSON.stringify(issue))}">
+                            <div class="flex items-start justify-between">
+                                <span class="text-xs font-medium text-amber-400">${escapeHtml(issue.field || 'General')}</span>
+                                <span class="text-[10px] text-gray-500">Click for details</span>
+                            </div>
+                            <p class="text-xs text-gray-300 mt-1">${escapeHtml(issue.message)}</p>
+                        </div>
+                    `;
+                }).join('');
+                html += `</div></div>`;
+            }
+            html += `</div>`;
+            reviewContent.innerHTML = html;
         } else {
             reviewBadge.textContent = 'Clear';
-            reviewBadge.className = 'ml-2 text-[10px] px-1.5 py-0.5 rounded font-bold bg-green-900/40 text-green-400 border border-green-800';
+            reviewBadge.className = 'ml-2 text-[10px] px-2 py-0.5 rounded font-bold bg-green-900/40 text-green-400 border border-green-800';
             reviewContent.innerHTML = `
                 <div class="flex items-center justify-center h-full text-green-500 text-sm mt-4">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                    All validations passed
+                    All deterministic validations passed
                 </div>
             `;
         }
@@ -159,126 +183,214 @@ document.addEventListener('DOMContentLoaded', () => {
         // 3. Render Line Items Table
         const tableBody = document.getElementById('table-body');
         tableBody.innerHTML = (data.line_items || []).map((item) => {
-            const amtStatus = item.amount?.validation_status || "Needs Review";
-            const isVerified = amtStatus === "Verified";
-            const amtColor = isVerified ? "text-green-400" : "text-amber-400";
-            const amtBadge = isVerified 
-                ? `<span class="px-1.5 py-0.5 text-[10px] bg-green-900/30 text-green-400 border border-green-800 rounded uppercase">Verified</span>`
-                : `<span class="px-1.5 py-0.5 text-[10px] bg-amber-900/30 text-amber-400 border border-amber-800 rounded uppercase">Needs Review</span>`;
+            const amtStatus = item.amount?.validation_status || "Needs review";
             
-            const ocrVal = escapeHtml(item.amount?.original_ocr_value || 'Missing');
-            const calcVal = item.amount?.calculated_value !== null ? escapeHtml(item.amount.calculated_value) : 'N/A';
+            let statusBadge = '';
+            if (amtStatus === 'Verified') {
+                statusBadge = `<span class="px-1.5 py-0.5 text-[10px] bg-green-900/30 text-green-400 border border-green-800 rounded uppercase">Verified</span>`;
+            } else if (amtStatus === 'Recovered') {
+                statusBadge = `<span class="px-1.5 py-0.5 text-[10px] bg-blue-900/30 text-blue-400 border border-blue-800 rounded uppercase">Recovered</span>`;
+            } else {
+                statusBadge = `<span class="px-1.5 py-0.5 text-[10px] bg-amber-900/30 text-amber-400 border border-amber-800 rounded uppercase">Needs Review</span>`;
+            }
+
+            const ocrVal = escapeHtml(item.amount?.original_ocr_value || '');
+            const calcVal = item.amount?.calculated_value !== null ? escapeHtml(item.amount.calculated_value) : '';
+            
+            // Determine what to show in the amount column primarily
+            let primaryAmount = ocrVal;
+            if (amtStatus === 'Recovered') primaryAmount = calcVal;
             
             return `
-                <tr class="interactive-element border-b border-gray-800/50" onclick="showItemEvidence(this)" data-item="${escapeHtml(JSON.stringify(item))}">
+                <tr class="interactive-element border-b border-gray-800/50 hover:bg-gray-850" onclick="showItemEvidence(this)" data-item="${escapeHtml(JSON.stringify(item))}">
                     <td class="px-5 py-4 whitespace-nowrap text-gray-300 font-mono text-xs">${item.item_serial_no?.value || '-'}</td>
                     <td class="px-5 py-4 whitespace-nowrap text-gray-300 font-mono text-xs">${item.cth?.value || '-'}</td>
-                    <td class="px-5 py-4 text-blue-400 font-mono text-xs max-w-xs truncate">${escapeHtml(item.raw_description_crop || '-')}</td>
+                    <td class="px-5 py-4 text-gray-400 text-xs max-w-xs truncate">${escapeHtml(item.raw_description_crop || '-')}</td>
                     <td class="px-5 py-4 whitespace-nowrap text-gray-300 font-mono text-xs">${item.quantity?.value || '-'}</td>
                     <td class="px-5 py-4 whitespace-nowrap text-gray-300 font-mono text-xs">${item.unit_price?.value || '-'}</td>
-                    <td class="px-5 py-4 whitespace-nowrap font-mono text-xs">
-                        <div class="flex flex-col space-y-1">
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-500">OCR:</span>
-                                <span class="text-gray-300">${ocrVal}</span>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-500">Calc:</span>
-                                <span class="${amtColor} font-bold">${calcVal}</span>
-                            </div>
-                            <div class="mt-1">${amtBadge}</div>
-                        </div>
+                    <td class="px-5 py-4 whitespace-nowrap font-mono text-xs text-gray-200">
+                        ${primaryAmount || '-'}
+                    </td>
+                    <td class="px-5 py-4 whitespace-nowrap">
+                        ${statusBadge}
                     </td>
                 </tr>
             `;
         }).join('');
         
-        // Clear evidence panel initially
         document.getElementById('evidence-placeholder').classList.remove('hidden');
         document.getElementById('evidence-content').classList.add('hidden');
     }
 
+    // Evidence Populators
     window.showFieldEvidence = function(el) {
         const fieldData = JSON.parse(el.dataset.field);
         const name = el.dataset.name;
-        renderEvidencePanel(name, fieldData.value, fieldData.source, fieldData.page, fieldData.conf, "Verified (Deterministic)", fieldData.value);
+        
+        let confDisplay = "Unavailable";
+        if (fieldData && fieldData.conf !== undefined && !isNaN(fieldData.conf)) {
+            confDisplay = (Number(fieldData.conf) * 100).toFixed(0) + "%";
+        }
+
+        let valDisplay = "Missing";
+        let rawOcr = "N/A";
+        let source = "N/A";
+        let page = "N/A";
+        let validation = "Needs review";
+
+        if (fieldData) {
+            valDisplay = fieldData.value;
+            rawOcr = fieldData.value;
+            source = fieldData.source || "OCR";
+            page = fieldData.page || "N/A";
+            validation = (fieldData.conf && fieldData.conf < 0.5) ? "Low confidence / OCR Extracted" : "OCR extracted (No secondary validation)";
+        }
+
+        renderEvidencePanel(
+            name, 
+            valDisplay, 
+            source, 
+            page, 
+            confDisplay, 
+            validation, 
+            rawOcr,
+            null
+        );
     };
 
     window.showItemEvidence = function(el) {
         const item = JSON.parse(el.dataset.item);
         const title = `Line Item ${item.item_serial_no?.value || '?'}`;
-        const valStr = `Qty: ${item.quantity?.value} | Price: ${item.unit_price?.value} | Calc Amt: ${item.amount?.calculated_value || 'N/A'}`;
+        
+        let confDisplay = "Unavailable";
+        if (item.item_serial_no && item.item_serial_no.conf !== undefined && !isNaN(item.item_serial_no.conf)) {
+             confDisplay = (Number(item.item_serial_no.conf) * 100).toFixed(0) + "% (CTH Anchor)";
+        }
+        
+        let calcNote = null;
+        if (item.amount?.validation_status === 'Verified') {
+            calcNote = `Python calculation (${item.quantity?.value} x ${item.unit_price?.value}) matched OCR amount (${item.amount?.original_ocr_value})`;
+        } else if (item.amount?.validation_status === 'Recovered') {
+            calcNote = `Original OCR amount was missing/occluded ('${item.amount?.original_ocr_value}'). Reconstructed deterministically: ${item.quantity?.value} x ${item.unit_price?.value} = ${item.amount?.calculated_value}`;
+        } else if (item.amount?.validation_status === 'Needs review') {
+            calcNote = `Original OCR amount ('${item.amount?.original_ocr_value}') differs from calculated ${item.amount?.calculated_value}, OR components are unreliable.`;
+        }
         
         renderEvidencePanel(
             title, 
-            valStr, 
-            "OCR (Table Bounding)", 
+            `Original OCR Amt: ${item.amount?.original_ocr_value || 'Missing'}nCalculated Amt: ${item.amount?.calculated_value || 'N/A'}`, 
+            "OCR (Geometric Table Bounding)", 
             item.item_serial_no?.page || 2, 
-            "N/A", 
-            item.amount?.validation_status || "Needs Review", 
-            item.raw_description_crop
+            confDisplay, 
+            item.amount?.validation_status || "Needs review", 
+            `Description Crop: ${item.raw_description_crop}`,
+            calcNote
         );
     };
 
-    function renderEvidencePanel(title, value, source, page, conf, validation, rawOcr) {
+    window.showIssueEvidence = function(el) {
+        const issue = JSON.parse(el.dataset.issue);
+        
+        renderEvidencePanel(
+            `Issue: ${issue.type}`, 
+            `Target Field: ${issue.field}`, 
+            "Deterministic Validation Engine", 
+            "N/A", 
+            "N/A", 
+            "Needs review", 
+            `OCR Value: ${issue.ocr_value || 'N/A'}nCalculated Value: ${issue.calc_value || 'N/A'}`,
+            issue.message
+        );
+    };
+
+    function renderEvidencePanel(title, value, source, page, conf, validation, rawOcr, calcNote) {
         document.getElementById('evidence-placeholder').classList.add('hidden');
         const content = document.getElementById('evidence-content');
         content.classList.remove('hidden');
         
-        const valColor = validation.includes('Review') ? 'text-amber-400' : 'text-green-400';
+        const valColor = validation.includes('Review') || validation.includes('Low') 
+            ? 'text-amber-400' 
+            : (validation.includes('Recovered') ? 'text-blue-400' : 'text-green-400');
 
-        content.innerHTML = `
-            <h4 class="text-lg font-medium text-white mb-2 pb-2 border-b border-gray-800">${title}</h4>
+        let html = `
+            <h4 class="text-sm font-semibold text-white mb-2 pb-2 border-b border-gray-800">${title}</h4>
             
-            <div class="space-y-3 text-sm">
+            <div class="space-y-4 text-sm mt-2">
                 <div>
-                    <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Extracted Value</div>
-                    <div class="font-mono text-gray-200 bg-gray-800/50 p-2 rounded border border-gray-700">${escapeHtml(String(value))}</div>
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Extracted Value / Info</div>
+                    <div class="font-mono text-gray-200 bg-gray-800/50 p-2 rounded border border-gray-700 whitespace-pre-wrap text-xs">${escapeHtml(String(value))}</div>
                 </div>
                 
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Source</div>
-                        <div class="font-mono text-blue-400">${source}</div>
+                        <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Source</div>
+                        <div class="font-mono text-blue-400 text-xs">${source}</div>
                     </div>
                     <div>
-                        <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Page</div>
-                        <div class="font-mono text-gray-300">${page || 'Unknown'}</div>
+                        <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Page</div>
+                        <div class="font-mono text-gray-300 text-xs">${page || 'Unavailable'}</div>
                     </div>
                     <div>
-                        <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Confidence</div>
-                        <div class="font-mono text-gray-300">${conf ? Number(conf).toFixed(2) : 'N/A'}</div>
+                        <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Confidence</div>
+                        <div class="font-mono text-gray-300 text-xs">${conf}</div>
                     </div>
                     <div>
-                        <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Validation</div>
-                        <div class="font-mono ${valColor}">${validation}</div>
+                        <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Validation Status</div>
+                        <div class="font-mono ${valColor} text-xs">${validation}</div>
                     </div>
                 </div>
+        `;
+        
+        if (calcNote) {
+            html += `
+                <div class="bg-blue-900/20 border border-blue-900/50 p-3 rounded mt-2">
+                    <div class="text-[10px] text-blue-400 uppercase tracking-wider mb-1">Calculation / Validation Detail</div>
+                    <div class="text-blue-200 text-xs">${escapeHtml(calcNote)}</div>
+                </div>
+            `;
+        }
 
+        html += `
                 <div class="pt-2">
-                    <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Raw OCR Text Evidence</div>
-                    <div class="font-mono text-xs text-gray-400 bg-gray-900 p-3 rounded border border-gray-800 h-32 overflow-y-auto whitespace-pre-wrap">${escapeHtml(rawOcr || 'No raw text available.')}</div>
-                    <p class="text-[10px] text-gray-500 mt-2 italic">Page-image crops are not saved in this spike architecture.</p>
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Raw OCR Text Evidence</div>
+                    <div class="font-mono text-xs text-gray-400 bg-gray-900 p-3 rounded border border-gray-800 max-h-32 overflow-y-auto whitespace-pre-wrap">${escapeHtml(rawOcr || 'No raw text available.')}</div>
+                    <p class="text-[9px] text-gray-600 mt-2 italic">Image crops are not exported in this spike architecture.</p>
                 </div>
             </div>
         `;
+        
+        content.innerHTML = html;
     }
 
     function renderField(label, fieldData) {
         if (!fieldData) return `
-            <div class="flex justify-between items-center py-1.5">
+            <div class="flex justify-between items-center py-2 px-2 -mx-2 rounded transition-colors interactive-element"
+                 onclick="showFieldEvidence(this)" 
+                 data-name="${label}" 
+                 data-field="${escapeHtml(JSON.stringify({ value: 'Missing', source: 'Not Found', page: 'N/A' }))}">
                 <span class="text-gray-400 text-sm">${label}</span>
-                <span class="text-gray-600 font-mono text-sm">Missing</span>
+                <span class="text-amber-500 font-mono text-xs px-2 py-0.5 bg-amber-900/20 border border-amber-900/50 rounded uppercase">Needs review</span>
             </div>`;
+            
+        let confStr = "NaN";
+        if (fieldData.conf !== undefined && !isNaN(fieldData.conf)) {
+            confStr = (Number(fieldData.conf) * 100).toFixed(0) + "%";
+        }
+        
+        let valColor = (fieldData.conf < 0.50) ? 'text-amber-400' : 'text-gray-100';
+
         return `
-            <div class="interactive-element flex justify-between items-center py-1.5 border-b border-gray-800/50 last:border-0 px-2 -mx-2 rounded" 
+            <div class="interactive-element flex justify-between items-center py-2 border-b border-gray-800/50 last:border-0 px-2 -mx-2 rounded transition-colors" 
                  onclick="showFieldEvidence(this)" 
                  data-name="${label}" 
                  data-field="${escapeHtml(JSON.stringify(fieldData))}">
-                <span class="text-gray-400 text-sm">${label}</span>
+                <span class="text-gray-400 text-sm flex items-center">
+                    ${label}
+                    ${fieldData.conf < 0.50 ? '<svg class="w-3 h-3 ml-1 text-amber-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>' : ''}
+                </span>
                 <div class="flex items-center space-x-3">
-                    <span class="text-gray-100 font-mono text-sm">${fieldData.value}</span>
-                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/20 text-blue-400 border border-blue-900/50 uppercase tracking-wider font-mono">${fieldData.source}</span>
+                    <span class="${valColor} font-mono text-sm">${fieldData.value}</span>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700 uppercase tracking-wider font-mono">${fieldData.source}</span>
                 </div>
             </div>
         `;
@@ -299,7 +411,6 @@ document.addEventListener('DOMContentLoaded', () => {
     btnExportExcel.addEventListener('click', () => {
         if (!currentExtractionData || typeof XLSX === 'undefined') return;
         
-        // Flatten metadata
         const meta = [
             { Field: "BE Number", Value: currentExtractionData.be_number?.value || '' },
             { Field: "BE Date", Value: currentExtractionData.be_date?.value || '' },
@@ -309,14 +420,13 @@ document.addEventListener('DOMContentLoaded', () => {
             { Field: "Total Assessed", Value: currentExtractionData.total_assessed_value?.value || '' }
         ];
 
-        // Flatten line items
         const items = (currentExtractionData.line_items || []).map(it => ({
             "S.No": it.item_serial_no?.value || '',
             "CTH": it.cth?.value || '',
             "Raw Description Crop": it.raw_description_crop || '',
             "Quantity": it.quantity?.value || '',
             "Unit Price": it.unit_price?.value || '',
-            "OCR Amount": it.amount?.original_ocr_value || '',
+            "Original OCR Amount": it.amount?.original_ocr_value || '',
             "Calculated Amount": it.amount?.calculated_value || '',
             "Validation Status": it.amount?.validation_status || ''
         }));
