@@ -206,8 +206,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.showItemEvidence = function(el) {
         const item = JSON.parse(el.dataset.item);
-        const title = \`Line Item \${item.item_serial_no?.value || '?'}\`;
-        const valStr = \`Qty: \${item.quantity?.value} | Price: \${item.unit_price?.value} | Calc Amt: \${item.amount?.calculated_value || 'N/A'}\`;
+        const title = `Line Item ${item.item_serial_no?.value || '?'}`;
+        const valStr = `Qty: ${item.quantity?.value} | Price: ${item.unit_price?.value} | Calc Amt: ${item.amount?.calculated_value || 'N/A'}`;
         
         renderEvidencePanel(
             title, 
