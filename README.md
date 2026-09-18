@@ -24,11 +24,9 @@ Technical spike for the customs document intelligence pipeline. This demo proves
 
 ## AI-assisted development
 
-I used Antigravity as an implementation agent, while keeping the system design and technical decisions human-led.
+I used Antigravity as an implementation agent, while handling the system design and technical decisions myself.
 
 I defined the architecture, extraction boundaries, schema, validation strategy, edge cases, dependencies, and acceptance criteria. The agent was used to implement those decisions, run the code and tests, inspect failures, and iterate. I reviewed the generated changes and outputs before accepting them.
-
-This follows the agent-assisted engineering pattern increasingly used in production teams: engineers define intent and constraints, agents execute scoped engineering tasks, and the resulting code is tested and reviewed before shipping.
 
 Key prompts
 
