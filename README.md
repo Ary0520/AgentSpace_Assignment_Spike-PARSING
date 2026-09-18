@@ -21,3 +21,27 @@ Technical spike for the customs document intelligence pipeline. This demo proves
    python app.py
    ```
 4. Open `http://localhost:5000` in your browser.
+
+## AI-assisted development
+
+I used Antigravity as an implementation agent, while keeping the system design and technical decisions human-led.
+
+I defined the architecture, extraction boundaries, schema, validation strategy, edge cases, dependencies, and acceptance criteria. The agent was used to implement those decisions, run the code and tests, inspect failures, and iterate. I reviewed the generated changes and outputs before accepting them.
+
+This follows the agent-assisted engineering pattern increasingly used in production teams: engineers define intent and constraints, agents execute scoped engineering tasks, and the resulting code is tested and reviewed before shipping.
+
+Key prompts
+
+1. Implementation
+
+Implement the parsing spike from the defined architecture. Use Python, PyMuPDF/pdfplumber, Tesseract OCR, Pydantic and pytest. Use deterministic logic for extraction, normalization, reconciliation and validation, and use an LLM only for genuinely ambiguous regions. Use the real sample PDF, preserve provenance, and do not hardcode document-specific values.
+
+2. Review / hardening
+
+Audit the implementation against the design. Identify hardcoded sample assumptions, extraction errors, validation gaps and missing edge-case handling. Run the test suite, fix only genuine issues within scope, and verify that the implementation remains reusable across document layouts.
+
+My role vs AI role
+
+I decided: architecture, hybrid extraction strategy, schema, validation rules, edge cases, scope, dependencies and acceptance criteria.
+
+AI executed: code implementation, debugging, test execution, iterative fixes and implementation review.
