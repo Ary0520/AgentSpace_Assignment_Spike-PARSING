@@ -154,29 +154,51 @@ def extract_fields(words):
         
     result["line_items"] = items
     
-    # 6. Validate & Normalize
-    # We validate quantity * unit_price == amount where possible
+    # 6. Validate & Normalize (No silent correction)
     for item in result["line_items"]:
-        # Clean numeric values
+        qty_str = item["quantity"]["value"]
+        price_str = item["unit_price"]["value"]
+        ocr_amt_str = item["amount"]["value"]
+        
+        # Preserve the original OCR value explicitly
+        item["amount"]["original_ocr_value"] = ocr_amt_str
+        
+        qty_reliable = True
+        price_reliable = True
+        
         try:
-            qty = float(re.sub(r'[^\d.]', '', item["quantity"]["value"])) if item["quantity"]["value"] else 0
-            price = float(re.sub(r'[^\d.]', '', item["unit_price"]["value"])) if item["unit_price"]["value"] else 0
+            qty = float(re.sub(r'[^\d.]', '', qty_str)) if qty_str else 0
+            if not qty_str or qty == 0: qty_reliable = False
+        except:
+            qty = 0
+            qty_reliable = False
             
-            amt_str = re.sub(r'[^\d.]', '', item["amount"]["value"])
-            if amt_str:
-                amt = float(amt_str)
-            else:
-                # Obscured by stamp, we can recompute
-                amt = round(qty * price, 2)
-                item["amount"]["value"] = str(amt)
-                item["amount"]["note"] = "Recomputed due to OCR occlusion"
+        try:
+            price = float(re.sub(r'[^\d.]', '', price_str)) if price_str else 0
+            if not price_str or price == 0: price_reliable = False
+        except:
+            price = 0
+            price_reliable = False
             
-            # Validation rule
-            if qty > 0 and price > 0 and abs((qty * price) - amt) > 1.0:
-                result["failed_extractions"].append(f"Arithmetic mismatch on Item {item['item_serial_no']['value']}")
+        if not qty_reliable or not price_reliable:
+            item["amount"]["calculated_value"] = None
+            item["amount"]["validation_status"] = "Needs Review"
+            result["failed_extractions"].append(f"Missing/unreliable QTY or PRICE on Item {item['item_serial_no']['value']}")
+        else:
+            calc_amt = round(qty * price, 2)
+            item["amount"]["calculated_value"] = str(calc_amt)
+            
+            # Parse OCR amount
+            try:
+                ocr_amt = float(re.sub(r'[^\d.]', '', ocr_amt_str)) if ocr_amt_str else -1
+            except:
+                ocr_amt = -1
                 
-        except Exception as e:
-            result["failed_extractions"].append(f"Could not parse numerics on Item {item.get('item_serial_no', {}).get('value', 'Unknown')}: {e}")
+            if ocr_amt == -1 or abs(calc_amt - ocr_amt) > 1.0:
+                item["amount"]["validation_status"] = "Calculated / Needs Review"
+                result["failed_extractions"].append(f"Arithmetic mismatch on Item {item['item_serial_no']['value']} (OCR vs Calc)")
+            else:
+                item["amount"]["validation_status"] = "Verified"
             
     return result
 
