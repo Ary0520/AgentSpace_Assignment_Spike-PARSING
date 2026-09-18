@@ -128,58 +128,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ${renderField('Total Assessed', data.total_assessed_value)}
         `;
 
-        // 2. Render Review Panel (Grouped)
-        const reviewContent = document.getElementById('review-content');
-        const reviewBadge = document.getElementById('review-badge');
-        
-        const issues = data.issues || [];
-        if (issues.length > 0) {
-            reviewBadge.textContent = `${issues.length} Issue${issues.length > 1 ? 's' : ''}`;
-            reviewBadge.className = 'ml-2 text-[10px] px-2 py-0.5 rounded font-bold bg-amber-900/40 text-amber-400 border border-amber-800';
-            
-            // Group issues
-            const groups = issues.reduce((acc, issue) => {
-                const type = issue.type || 'Other';
-                if (!acc[type]) acc[type] = [];
-                acc[type].push(issue);
-                return acc;
-            }, {});
-
-            let html = `<div class="space-y-4">`;
-            for (const [groupName, groupIssues] of Object.entries(groups)) {
-                html += `
-                    <div>
-                        <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 border-b border-gray-800 pb-1">${groupName}</h4>
-                        <div class="space-y-2">
-                `;
-                html += groupIssues.map(issue => {
-                    return `
-                        <div class="issue-card bg-gray-800/50 p-3 rounded border border-gray-700/50" 
-                             onclick="showIssueEvidence(this)" 
-                             data-issue="${escapeHtml(JSON.stringify(issue))}">
-                            <div class="flex items-start justify-between">
-                                <span class="text-xs font-medium text-amber-400">${escapeHtml(issue.field || 'General')}</span>
-                                <span class="text-[10px] text-gray-500">Click for details</span>
-                            </div>
-                            <p class="text-xs text-gray-300 mt-1">${escapeHtml(issue.message)}</p>
-                        </div>
-                    `;
-                }).join('');
-                html += `</div></div>`;
-            }
-            html += `</div>`;
-            reviewContent.innerHTML = html;
-        } else {
-            reviewBadge.textContent = 'Clear';
-            reviewBadge.className = 'ml-2 text-[10px] px-2 py-0.5 rounded font-bold bg-green-900/40 text-green-400 border border-green-800';
-            reviewContent.innerHTML = `
-                <div class="flex items-center justify-center h-full text-green-500 text-sm mt-4">
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                    All deterministic validations passed
-                </div>
-            `;
-        }
-
         // 3. Render Line Items Table
         const tableBody = document.getElementById('table-body');
         tableBody.innerHTML = (data.line_items || []).map((item) => {
